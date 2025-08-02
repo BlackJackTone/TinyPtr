@@ -27,7 +27,7 @@
 #include "benchmark_conc_skulkerht.h"
 #include "benchmark_cuckoo.h"
 #include "benchmark_dereftab64.h"
-#include "benchmark_growt.h"
+// #include "benchmark_growt.h"
 #include "benchmark_iceberg.h"
 #include "benchmark_intarray64.h"
 #include "benchmark_junction.h"
@@ -566,9 +566,9 @@ Benchmark::Benchmark(BenchmarkCLIPara& para)
         case BenchmarkObjectType::SKULKERHT:
             obj = new BenchmarkSkulkerHT(table_size, para.bin_size);
             break;
-        case BenchmarkObjectType::GROWT:
-            obj = new BenchmarkGrowt(table_size);
-            break;
+        // case BenchmarkObjectType::GROWT:
+        //     obj = new BenchmarkGrowt(table_size);
+        //     break;
         case BenchmarkObjectType::CONCURRENT_SKULKERHT:
             obj = new BenchmarkConcSkulkerHT(table_size, para.bin_size);
             break;
@@ -596,7 +596,7 @@ Benchmark::Benchmark(BenchmarkCLIPara& para)
             obj = new BenchmarkBlastHT(table_size, para.bin_size);
             break;
         case BenchmarkObjectType::RESIZABLE_BLAST: {
-            uint64_t part_num = 10;
+            uint64_t part_num = 5;
             obj = new BenchmarkResizableBlastHT(table_size / part_num, part_num,
                                                 thread_num);
         } break;
@@ -1319,8 +1319,11 @@ Benchmark::Benchmark(BenchmarkCLIPara& para)
             };
             break;
         case BenchmarkCaseType::YCSB_A:
+        case BenchmarkCaseType::YCSB_NEG_A:
         case BenchmarkCaseType::YCSB_B:
+        case BenchmarkCaseType::YCSB_NEG_B:
         case BenchmarkCaseType::YCSB_C:
+        case BenchmarkCaseType::YCSB_NEG_C:
             run = [this, para]() {
                 std::vector<uint64_t> ycsb_keys;
                 ycsb_load(ycsb_keys, para.ycsb_load_path);

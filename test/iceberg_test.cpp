@@ -1,4 +1,3 @@
-#include "utils/xxhash64.h"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstdint>
@@ -9,13 +8,15 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include "concurrent_skulker_ht.h"
+#include "iceberg_table.h"
+#include "resizable_ht.h"
+#include "utils/rng.h"
 
-using namespace std;
+rng::rng64 rng64(123456789);
 
-#if 0
-
-#include "benchmark/benchmark_growt.h"
 using namespace tinyptr;
+using namespace std;
 
 // Ensure SlowXXHash64 is defined or included
 // If SlowXXHash64 is part of an external library, ensure it is linked correctly
@@ -29,49 +30,56 @@ uint64_t my_int_rand() {
 }
 
 uint64_t my_value_rand() {
-    int tmp = (rand() | (rand() >> 10 << 15));
-    return SlowXXHash64::hash(&tmp, sizeof(int32_t), 1);
+    // int tmp = (rand() | (rand() >> 10 << 15));
+    return rng64();
+    // cout << tmp << endl;
+    // return SlowXXHash64::hash(&tmp, sizeof(int32_t), 1);
 }
 
-void concurrent_insert(BenchmarkGrowt& ht,
+void concurrent_insert(iceberg_table* ht,
                        const vector<pair<uint64_t, uint64_t>>& data, int start,
                        int end) {
+
+    thread_local uint64_t tid = gettid();
+
     for (int i = start; i < end; ++i) {
-        if (!ht.Insert(data[i].first, data[i].second)) {
+        if (!iceberg_insert(ht, data[i].first, data[i].second, tid)) {
             printf("insert failed: %llu, %llu\n", data[i].first,
                    data[i].second);
-            exit(0);
+            // printf("handle: %llu\n", handle);
+            // printf("i: %llu\n", i);
+            // ht.FreeHandle(handle);
+            // exit(0);
         }
     }
 }
 
-void concurrent_query(BenchmarkGrowt& ht,
+void concurrent_query(iceberg_table* ht,
                       const vector<pair<uint64_t, uint64_t>>& data, int start,
                       int end) {
+    thread_local uint64_t tid = gettid();
     for (int i = start; i < end; ++i) {
-        uint64_t val = 0;
-        // std::cout << i - start << std::endl;
-        // ht.Query(data[i].first + 1000000000000000000ull, &val);
-        val = ht.Query(data[i].first, 0);
-        // ASSERT_TRUE(ht.Query(data[i].first, &val));
-        // ASSERT_EQ(val, data[i].second);
+        uint64_t res;
+        ASSERT_TRUE(iceberg_get_value(ht, data[i].first, &res, tid));
+        ASSERT_EQ(res, data[i].second);
     }
 }
 
-TEST(GrowT_TESTSUITE, ParallelInsertQuery) {
+TEST(Iceberg_TESTSUITE, ParallelInsertQuery) {
     srand(233);
 
     // int num_threads = std::thread::hardware_concurrency();
-    int num_threads = 1;
-    int num_operations = 1e8;  // Large number of operations
-
+    int num_threads = 16;
+    int num_operations = 134217728;  // Large number of operations
+    int part_num = 10;
     // Declare start and end for timing
     chrono::time_point<chrono::high_resolution_clock> start, end;
 
     // Ensure data is declared and initialized
     vector<pair<uint64_t, uint64_t>> data(num_operations);
     for (int i = 0; i < num_operations; ++i) {
-        data[i] = {static_cast<uint64_t>(i*233), my_value_rand()};
+        // cout << i << endl;
+        data[i] = {static_cast<uint64_t>(i * 233), my_value_rand()};
     }
 
     // Ensure SlowXXHash64 is defined or included
@@ -80,12 +88,17 @@ TEST(GrowT_TESTSUITE, ParallelInsertQuery) {
     // Ensure ConcurrentSkulkerHT is defined in concurrent_skulker_ht.h
     // If not, include the correct header or define the class
 
-    // Correct the namespace usage
-    using namespace std;
-    using namespace tinyptr;  // Ensure tinyptr is a valid namespace
-
     start = chrono::high_resolution_clock::now();
-    BenchmarkGrowt ht(static_cast<uint64_t>(num_operations)*2);
+
+    iceberg_table tab;
+    uint64_t res = 0;
+    uint64_t tmp = num_operations;
+    while (tmp) {
+        tmp >>= 1;
+        res++;
+    }
+    iceberg_init(&tab, res);
+
     end = chrono::high_resolution_clock::now();
     std::cout
         << "init time: "
@@ -101,8 +114,8 @@ TEST(GrowT_TESTSUITE, ParallelInsertQuery) {
         int start = i * operations_per_thread;
         int end = (i == num_threads - 1) ? num_operations
                                          : start + operations_per_thread;
-        insert_threads.emplace_back(concurrent_insert, std::ref(ht),
-                                    std::cref(data), start, end);
+        insert_threads.emplace_back(concurrent_insert, &tab, std::cref(data),
+                                    start, end);
     }
 
     for (auto& thread : insert_threads) {
@@ -122,8 +135,8 @@ TEST(GrowT_TESTSUITE, ParallelInsertQuery) {
         int start = i * operations_per_thread;
         int end = (i == num_threads - 1) ? num_operations
                                          : start + operations_per_thread;
-        query_threads.emplace_back(concurrent_query, std::ref(ht),
-                                   std::cref(data), start, end);
+        query_threads.emplace_back(concurrent_query, &tab, std::cref(data),
+                                   start, end);
     }
 
     for (auto& thread : query_threads) {
@@ -138,12 +151,7 @@ TEST(GrowT_TESTSUITE, ParallelInsertQuery) {
 }
 
 int main(int argc, char** argv) {
-    testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
-#endif
-
-int main(int argc, char** argv) {
+    srand(233);
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

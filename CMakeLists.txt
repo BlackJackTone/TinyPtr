@@ -19,6 +19,8 @@ if(COMPILE_FOR_ASAN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -g")
 endif()
 
+option(DISABLE_RESIZING "Whether to disable resizing functionality" ON)
+
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include_directories(src)
@@ -34,6 +36,11 @@ list(REMOVE_ITEM SOURCES ${DEPRECATED_TEST_SRC})
 add_library(tinyptr_lib ${SOURCES})
 target_include_directories(tinyptr_lib PRIVATE ${SOURCE_DIR})
 target_compile_options(tinyptr_lib INTERFACE -march=native -flto)
+
+# Add preprocessor definition based on resizing option
+if(DISABLE_RESIZING)
+    target_compile_definitions(tinyptr_lib PUBLIC CUCKOO_DISABLE_RESIZING)
+endif()
 
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE tinyptr_lib)
@@ -54,10 +61,10 @@ build_iceberg()
 add_dependencies(tinyptr_lib iceberg)
 target_link_libraries(tinyptr_lib PUBLIC iceberg_lib ssl crypto pthread)
 
-include(growt)
-build_growt()
-add_dependencies(tinyptr_lib growt)
-target_link_libraries(tinyptr_lib PUBLIC growt_lib pthread)
+# include(growt)
+# build_growt()
+# add_dependencies(tinyptr_lib growt)
+# target_link_libraries(tinyptr_lib PUBLIC growt_lib pthread)
 
 include(junction)
 build_junction()
